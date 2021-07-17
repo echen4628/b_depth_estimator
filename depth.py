@@ -47,6 +47,23 @@ class depth_estimator:
         obj_height = float(box[4])*self.camera_pixel_height
         return obj_class, obj_width, obj_height
     
+    def dimension_ratio(self, obj_class, obj_width, obj_height):
+        bbox_ratio = obj_width/obj_height
+        actual_ratio = self.classes[obj_class][0]/self.classes[obj_class][1]
+        return bbox_ratio, actual_ratio
+
+    def logic(self, bbox_ratio, actual_ratio, estimation_from_width, estimation_from_height, e):
+        if actual_ratio- bbox_ratio < e:
+            print("width and height ratio is as expect")
+            return 0
+        elif actual_ratio < bbox_ratio:
+            print("the height is smaller than expected, the object is probably tilted around the y axis")
+            return 1      
+        elif actual_ratio > bbox_ratio:
+            print("the width is smaller than expect, the object is probably tilted around the z axis")
+            return 2
+
+
     def read_txt(self, file_path):
         with open(file_path, "r") as bbox:
             bbox_raw = bbox.read()
@@ -58,21 +75,33 @@ class depth_estimator:
                 i += 5
             return all_bboxes
     
-    def single_image_estimate(self, file):
-        all_bboxes = self.read_txt(file)
-        for box in all_bboxes:
-            obj_class, obj_width, obj_height = self.yolo2pixel(box)
+    def single_bbox_estimate(self, obj_class, obj_width, obj_height):
             width = self.classes[obj_class][0]
             height = self.classes[obj_class][1]
             estimated_distance_width = self.estimate(width, obj_width)
             estimated_distance_height = self.estimate(height, obj_height)
             print("distance to ", self.classes[obj_class],  " estimated using width is ", estimated_distance_width)
             print("distance to ", self.classes[obj_class],  " estimated using height is ", estimated_distance_height)
+            bbox_ratio, actual_ratio = self.dimension_ratio(obj_class, obj_width, obj_height)
+            index = self.logic(bbox_ratio, actual_ratio, estimated_distance_width, estimated_distance_height, 0.02)
+            averaged_distance = (estimated_distance_width + estimated_distance_height)/2
+            return index, (averaged_distance, estimated_distance_width, estimated_distance_height)
 
+    def single_image_estimate(self, file):
+        all_bboxes = self.read_txt(file)
+        output_file = open("estimated_distances", "a")
+        print(file, file=output_file)
+        for box in all_bboxes:
+            obj_class, obj_width, obj_height = self.yolo2pixel(box)
+            print("obj_class: ", obj_class, file=output_file)
+            print("obj_width: ", obj_width, file=output_file)
+            print("obj_height: ", obj_height, file=output_file)
+            index, distances = self.single_bbox_estimate(obj_class, obj_width, obj_height)
+            print(str(index) + " ", distances, file=output_file)
 
-
+            
 if __name__ == "__main__":
-    estimator = depth_estimator(4.25, 4.2, 5.6, 3024, 4032, {0:(1,2), 1:(2,3), 2:(3,4)})
+    estimator = depth_estimator(4.25, 4.2, 5.6, 3024, 4032, {0:(1.5,4), 1:(2.75,4.45), 2:(1.2,4.5)})
     files = os.listdir()
     files = list(filter(lambda file: file[-3:]=="txt", files))
     for file in files:
