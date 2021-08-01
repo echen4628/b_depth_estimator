@@ -54,9 +54,17 @@ class depth_estimator:
             obj_height: a double that represents the height of the object in pixels
         """
         obj_class = int(box[0])
+        obj_x = float(box[1])
+        obj_y = float(box[2])
         obj_width = float(box[3])*self.camera_pixel_width
         obj_height = float(box[4])*self.camera_pixel_height
-        return obj_class, obj_width, obj_height
+        over_left_edge = (obj_x - (box[3]/2)) <= 0.01 #True if over the left edge
+        over_right_edge = (obj_x - (box[3]/2)) >= 0.99
+        over_top_edge =(obj_y - (box[4]/2)) <= 0.01 # not ure if top is y = 0 or bottom is y = 1
+        over_bottom_edge = (obj_y - (box[4]/2)) >= 0.99
+        over_edge = [over_left_edge,over_right_edge,over_top_edge, over_bottom_edge]
+        # over_edge = {"left_edge":over_left_edge, "right_edge": over_right_edge, "top_edge":over_top_edge, "bottom_edge":over_bottom_edge}        
+        return obj_class, obj_width, obj_height, over_edge
     
     def dimension_ratio(self, obj_class, obj_width, obj_height):
         """
@@ -72,7 +80,32 @@ class depth_estimator:
         actual_ratio = self.classes[obj_class][0]/self.classes[obj_class][1]
         return bbox_ratio, actual_ratio
 
-    def logic(self, bbox_ratio, actual_ratio):
+
+    def edge_logic(self,over_edge):
+        #biggest case first
+        if over_edge[0] and over_edge[1]:
+            return 3, "we are too close. The object is out of frame on the left and right"
+        elif over_edge[2] and over_edge[3]:
+            return 3, "we are too close. The object is out of frame on the top and bottom"
+        #medium case
+        elif sum(over_edge)==2:
+            print("we will return two things")
+        direction = ""
+        if over_edge[2]:
+            direction = direction + " top"
+        if over_edge[3]:
+            direction = direction + " bottom"
+        if over_edge[0]:
+            direction = direction + " left"
+        if over_edge[1]:
+            direction = direction + " right"
+        if sum(over_edge)==1 and (over_edge[2] or over_edge[3]):
+            index = 1
+        elif sum(over_edge)==1 and (over_edge[0] or over_edge[1]):
+            index = 2
+        return index, "go to" + direction
+
+    def logic(self, bbox_ratio, actual_ratio, over_edge):
         """
         probably should be renamed.
         inputs:  
@@ -83,7 +116,11 @@ class depth_estimator:
                     1 selects the estimation from width, 
                     2 selects the estimation from height
         """
-        if actual_ratio- bbox_ratio < self.e:
+        if True in over_edge:
+            index, warning = self.edge_logic(over_edge)
+            print(warning)
+            return index
+        elif actual_ratio- bbox_ratio < self.e:
             print("width and height ratio is as expect")
             return 0
         elif actual_ratio < bbox_ratio:
@@ -92,7 +129,7 @@ class depth_estimator:
         elif actual_ratio > bbox_ratio:
             print("the width is smaller than expect, the object is probably tilted around the z axis")
             return 2
-
+    
 
     def read_txt(self, file_path):
         """
@@ -121,16 +158,19 @@ class depth_estimator:
             index: an int that selects from the distances tuple
             distances: a tuple in the form of (averaged_distance, estimated_distance_width, estimated_distance_height)
         """
-        width = self.classes[obj_class][0]
-        height = self.classes[obj_class][1]
-        estimated_distance_width = self.estimate(width, obj_width)
-        estimated_distance_height = self.estimate(height, obj_height)
-        print("distance to ", self.classes[obj_class],  " estimated using width is ", estimated_distance_width)
-        print("distance to ", self.classes[obj_class],  " estimated using height is ", estimated_distance_height)
         bbox_ratio, actual_ratio = self.dimension_ratio(obj_class, obj_width, obj_height)
         index = self.logic(bbox_ratio, actual_ratio)
-        averaged_distance = (estimated_distance_width + estimated_distance_height)/2
-        distances = (averaged_distance, estimated_distance_width, estimated_distance_height)
+        if index <=2:
+            width = self.classes[obj_class][0]
+            height = self.classes[obj_class][1]
+            estimated_distance_width = self.estimate(width, obj_width)
+            estimated_distance_height = self.estimate(height, obj_height)
+            print("distance to ", self.classes[obj_class],  " estimated using width is ", estimated_distance_width)
+            print("distance to ", self.classes[obj_class],  " estimated using height is ", estimated_distance_height)
+            averaged_distance = (estimated_distance_width + estimated_distance_height)/2
+            distances = (averaged_distance, estimated_distance_width, estimated_distance_height)
+        else:
+            distances = None
         return index, distances
 
     def single_image_estimate(self, yolo_file, output_file_path):
@@ -159,47 +199,3 @@ if __name__ == "__main__":
     files = list(filter(lambda file: file[-3:]=="txt", files))
     for file in files:
         estimator.single_image_estimate(file, "estimated_distance.txt")
-    # all_bboxes = estimator.read_txt("IMG_2209.txt")
-    # for box in all_bboxes:
-    #     obj_class, obj_width, obj_height = estimator.yolo2pixel(box)
-    #     width = estimator.classes[obj_class][0]
-    #     height = estimator.classes[obj_class][1]
-    #     estimated_distance_width = estimator.estimate(width, obj_width)
-    #     estimated_distance_height = estimator.estimate(height, obj_height)
-    #     print("distance to ", estimator.classes[obj_class],  " estimated using width is ", estimated_distance_width)
-    #     print("distance to ", estimator.classes[obj_class],  " estimated using height is ", estimated_distance_height)
-
-
-
-
-
-
-
-
-    # focal_length = 4.25
-    # camera_height = 1
-    # camera_width = 2
-    # camera_pixel_height = 4032
-    # camera_pixel_width = 3024
-    # files = os.listdir()
-    # files = list(filter(lambda file: file[-3:]=="txt", files))
-    # for file in files:
-    #     with open(file,"r") as bbox:
-    #         a = bbox.read()
-    #         a = a.split()
-    #         b = []
-    #         i = 0
-    #         while i < len(a):
-    #             b.append(a[i:i+5])
-    #             i += 5
-    #         print(b)
-    #         for box in b:
-    #             print(box)
-    #             obj_class = box[0]
-    #             obj_width = float(box[3])
-    #             obj_height = float(box[4])
-    #             print(obj_class)
-    #             print(obj_width*camera_pixel_width)
-    #             print(obj_height*camera_pixel_height)
-
-                
