@@ -56,15 +56,17 @@ class depth_estimator:
         obj_class = int(box[0])
         obj_x = float(box[1])
         obj_y = float(box[2])
-        obj_width = float(box[3])*self.camera_pixel_width
-        obj_height = float(box[4])*self.camera_pixel_height
-        over_left_edge = (obj_x - (box[3]/2)) <= 0.01 #True if over the left edge
-        over_right_edge = (obj_x - (box[3]/2)) >= 0.99
-        over_top_edge =(obj_y - (box[4]/2)) <= 0.01 # not ure if top is y = 0 or bottom is y = 1
-        over_bottom_edge = (obj_y - (box[4]/2)) >= 0.99
+        obj_width = float(box[3])
+        obj_height = float(box[4])
+        pixel_obj_width = float(box[3])*self.camera_pixel_width
+        pixel_obj_height = float(box[4])*self.camera_pixel_height
+        over_left_edge = (obj_x - (obj_width/2)) <= 0.01 #True if over the left edge
+        over_right_edge = (obj_x - (obj_width/2)) >= 0.99
+        over_top_edge =(obj_y - (obj_height/2)) <= 0.01 # not ure if top is y = 0 or bottom is y = 1
+        over_bottom_edge = (obj_y - (obj_height/2)) >= 0.99
         over_edge = [over_left_edge,over_right_edge,over_top_edge, over_bottom_edge]
         # over_edge = {"left_edge":over_left_edge, "right_edge": over_right_edge, "top_edge":over_top_edge, "bottom_edge":over_bottom_edge}        
-        return obj_class, obj_width, obj_height, over_edge
+        return obj_class, pixel_obj_width, pixel_obj_height, over_edge
     
     def dimension_ratio(self, obj_class, obj_width, obj_height):
         """
@@ -99,10 +101,13 @@ class depth_estimator:
             direction = direction + " left"
         if over_edge[1]:
             direction = direction + " right"
+        #index
         if sum(over_edge)==1 and (over_edge[2] or over_edge[3]):
             index = 1
         elif sum(over_edge)==1 and (over_edge[0] or over_edge[1]):
             index = 2
+        else:
+            index = 3
         return index, "go to" + direction
 
     def logic(self, bbox_ratio, actual_ratio, over_edge):
@@ -148,7 +153,7 @@ class depth_estimator:
                 i += 5
             return all_bboxes
     
-    def single_bbox_estimate(self, obj_class, obj_width, obj_height):
+    def single_bbox_estimate(self, obj_class, obj_width, obj_height, over_edge):
         """
         input:
             obj_class: an int that corresponds to the object class
@@ -159,7 +164,7 @@ class depth_estimator:
             distances: a tuple in the form of (averaged_distance, estimated_distance_width, estimated_distance_height)
         """
         bbox_ratio, actual_ratio = self.dimension_ratio(obj_class, obj_width, obj_height)
-        index = self.logic(bbox_ratio, actual_ratio)
+        index = self.logic(bbox_ratio, actual_ratio, over_edge)
         if index <=2:
             width = self.classes[obj_class][0]
             height = self.classes[obj_class][1]
@@ -182,20 +187,22 @@ class depth_estimator:
             nothing, just writes to the output_file_path
         """
         all_bboxes = self.read_txt(yolo_file)
-        output_file = open(output_file_path, "a")
+        output_file = open(output_file_path, "w")
         print(file, file=output_file)
+        print(file)
         for box in all_bboxes:
-            obj_class, obj_width, obj_height = self.yolo2pixel(box)
+            obj_class, obj_width, obj_height, over_edge= self.yolo2pixel(box)
             print("obj_class: ", obj_class, file=output_file)
             print("obj_width: ", obj_width, file=output_file)
             print("obj_height: ", obj_height, file=output_file)
-            index, distances = self.single_bbox_estimate(obj_class, obj_width, obj_height)
+            index, distances = self.single_bbox_estimate(obj_class, obj_width, obj_height, over_edge)
             print(str(index) + " ", distances, file=output_file)
 
             
 if __name__ == "__main__":
-    estimator = depth_estimator(4.25, 4.2, 5.6, 3024, 4032, {0:(1.5,4), 1:(2.75,4.45), 2:(1.2,4.5)}, 0.02)
+    estimator = depth_estimator(4.25, 4.2, 5.6, 3024, 4032, {0:(1.5,4), 1:(2.75,4.45), 2:(1.2,4.5)}, 0)
     files = os.listdir()
     files = list(filter(lambda file: file[-3:]=="txt", files))
+    # files = ["IMG_2211.txt"]
     for file in files:
-        estimator.single_image_estimate(file, "estimated_distance.txt")
+        estimator.single_image_estimate(file, "estimated_distance1.txt")
