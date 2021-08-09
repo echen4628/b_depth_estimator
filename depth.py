@@ -24,9 +24,9 @@ class depth_estimator:
     
     def object_height(self, pixel_height):
         """
-        inputs:
+        input:
             pixel_height: the number of pixels the height of the object takes up
-        outputs:
+        output:
             object_height_on_sensor: the physical height the object takes up on the sensor
         """
         object_height_on_sensor = self.camera_height * pixel_height / self.camera_pixel_height
@@ -46,7 +46,7 @@ class depth_estimator:
     
     def yolo2pixel(self, box):
         """
-        inputs:
+        input:
             box: a list describing a bbox in yolo format [class,x,y,width,height]
         outputs:
             obj_class: an int that corresponds to the object class
@@ -74,7 +74,7 @@ class depth_estimator:
             obj_class: an int that corresponds to the object class
             obj_width: a double that represents the width of the object in pixels
             obj_height: a double that represents the height of the object in pixels
-        output:
+        outputs:
             bbox_ratio: a double that represents the ratio of the width to the height of the bounding box
             actual_ratio: a double that represents the ratio of the actual width to height of the object
         """
@@ -83,7 +83,7 @@ class depth_estimator:
         return bbox_ratio, actual_ratio
 
 
-    def edge_logic(self,over_edge):
+    def edge_logic(self, over_edge):
         #biggest case first
         if over_edge[0] and over_edge[1]:
             return 3, "we are too close. The object is out of frame on the left and right"
@@ -125,7 +125,7 @@ class depth_estimator:
             index, warning = self.edge_logic(over_edge)
             print(warning)
             return index
-        elif actual_ratio- bbox_ratio < self.e:
+        elif actual_ratio - bbox_ratio < self.e:
             print("width and height ratio is as expect")
             return 0
         elif actual_ratio < bbox_ratio:
@@ -155,11 +155,11 @@ class depth_estimator:
     
     def single_bbox_estimate(self, obj_class, obj_width, obj_height, over_edge):
         """
-        input:
+        inputs:
             obj_class: an int that corresponds to the object class
             obj_width: a double that represents the width of the object in pixels
             obj_height: a double that represents the height of the object in pixels
-        output:
+        outputs:
             index: an int that selects from the distances tuple
             distances: a tuple in the form of (averaged_distance, estimated_distance_width, estimated_distance_height)
         """
@@ -180,7 +180,7 @@ class depth_estimator:
 
     def single_image_estimate(self, yolo_file, output_file_path):
         """
-        input:
+        inputs:
             yolo_file: a string that represents the name of the file containing all the bboxs
             output_file_path: a string that represents the name of output file containing all the estimated distances
         output:
@@ -191,7 +191,7 @@ class depth_estimator:
         print(file, file=output_file)
         print(file)
         for box in all_bboxes:
-            obj_class, obj_width, obj_height, over_edge= self.yolo2pixel(box)
+            obj_class, obj_width, obj_height, over_edge = self.yolo2pixel(box)
             print("obj_class: ", obj_class, file=output_file)
             print("obj_width: ", obj_width, file=output_file)
             print("obj_height: ", obj_height, file=output_file)
@@ -200,7 +200,8 @@ class depth_estimator:
 
             
 if __name__ == "__main__":
-    estimator = depth_estimator(4.25, 4.2, 5.6, 3024, 4032, {0:(1.5,4), 1:(2.75,4.45), 2:(1.2,4.5)}, 0)
+    estimator = depth_estimator(focal_length=4.25, camera_width=4.2, camera_height=5.6, camera_pixel_width=3024, \
+        camera_pixel_height=4032, classes={0:(1.5,4), 1:(2.75,4.45), 2:(1.2,4.5)}, error=0)
     files = os.listdir()
     files = list(filter(lambda file: file[-3:]=="txt", files))
     # files = ["IMG_2211.txt"]
